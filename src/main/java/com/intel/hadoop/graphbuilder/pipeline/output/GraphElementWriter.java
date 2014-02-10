@@ -24,7 +24,7 @@ import com.intel.hadoop.graphbuilder.graphelements.SerializedGraphElement;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.KeyFunction;
 import com.intel.hadoop.graphbuilder.types.StringType;
 import com.intel.hadoop.graphbuilder.util.ArgumentBuilder;
-import com.thinkaurelius.titan.core.TitanGraph;
+import com.tinkerpop.blueprints.Graph;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -42,6 +42,9 @@ public abstract class GraphElementWriter {
 
     public static final String PROPERTY_KEY_SRC_TITAN_ID = "srcTitanID";
     public static final String PROPERTY_KEY_TGT_TITAN_ID = "tgtTitanID";
+    // todo generalize to tinkerpop?
+    public static final String PROPERTY_KEY_SRC_NEO4J_ID = "srcTitanID";
+    public static final String PROPERTY_KEY_TGT_NEO4J_ID = "tgtTitanID";
 
     protected Hashtable<EdgeID, Writable> edgeSet;
     protected Hashtable<Object, Writable> vertexSet;
@@ -49,7 +52,7 @@ public abstract class GraphElementWriter {
     protected Enum vertexCounter;
     protected Enum edgeCounter;
     protected Reducer.Context context;
-    protected TitanGraph graph;
+    protected Graph graph;
     protected SerializedGraphElement outValue;
     protected IntWritable outKey;
     protected KeyFunction keyFunction;
@@ -64,7 +67,7 @@ public abstract class GraphElementWriter {
 
         context = (Reducer.Context)args.get("context");
 
-        graph = (TitanGraph)args.get("graph");
+        graph = (Graph) args.get("graph");
 
         outValue = (SerializedGraphElement)args.get("outValue");
         outKey = (IntWritable)args.get("outKey");

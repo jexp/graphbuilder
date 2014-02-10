@@ -61,7 +61,7 @@ public class GBMapReduceDriver<K1, V1, K2, V2, K3, V3> extends
     @SuppressWarnings("rawtypes")
     private Class<? extends InputFormat> inputFormatClass;
 
-    GBMapReduceDriver(MapDriver<K1, V1, K2, V2> mapper, ReduceDriver<K2, V2, K3, V3> reducer){
+    public GBMapReduceDriver(MapDriver<K1, V1, K2, V2> mapper, ReduceDriver<K2, V2, K3, V3> reducer){
         super.setCounters(new Counters());
         setMyMapDriver(mapper);
         setMyReduceDriver(reducer);

@@ -17,24 +17,19 @@
  * For more about this software visit:
  *     http://www.01.org/GraphBuilder
  */
-package com.intel.hadoop.graphbuilder.pipeline.output.titan;
+package com.intel.hadoop.graphbuilder.pipeline.output.neo4j;
 
+import com.intel.hadoop.graphbuilder.graphelements.SerializedGraphElement;
 import com.intel.hadoop.graphbuilder.pipeline.input.InputConfiguration;
-import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.SourceVertexKeyFunction;
 import com.intel.hadoop.graphbuilder.pipeline.output.GraphGenerationMRJob;
+import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.SourceVertexKeyFunction;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.propertygraphschema.EdgeSchema;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.propertygraphschema.PropertyGraphSchema;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.propertygraphschema.PropertySchema;
 import com.intel.hadoop.graphbuilder.pipeline.tokenizer.GraphBuildingRule;
-import com.intel.hadoop.graphbuilder.graphelements.SerializedGraphElement;
 import com.intel.hadoop.graphbuilder.util.*;
 import com.intel.hadoop.graphbuilder.util.Timer;
-import com.thinkaurelius.titan.core.KeyMaker;
-import com.thinkaurelius.titan.core.TitanGraph;
-import com.thinkaurelius.titan.core.TitanKey;
-import com.tinkerpop.blueprints.Edge;
-import com.tinkerpop.blueprints.Vertex;
-
+import com.tinkerpop.blueprints.impls.neo4j2.Neo4j2Graph;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.hadoop.conf.Configuration;
@@ -52,15 +47,17 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.*;
 
+import static com.intel.hadoop.graphbuilder.pipeline.output.neo4j.Neo4jConfig.GB_ID_FOR_NEO4J;
+
 /**
- * This class handles loading the constructed property graph into Titan.
+ * This class handles loading the constructed property graph into Neo4j.
  *
- * <p>There is some configuration of Titan at setup time,
+ * <p>There is some configuration of Neo4j at setup time,
  * followed by  a chain of  two map reduce jobs.
  * </p>
  *
  * <p>
- * At setup time, this class makes a connection to Titan,
+ * At setup time, this class makes a connection to Neo4j,
  * and declares all necessary keys, properties and edge signatures.
  * </p>
  * <p>
@@ -79,12 +76,12 @@ import java.util.*;
  * <ul>
  *   <li> Removes any duplicate edges or vertices. 
  *       (By default, the class combines the property maps for duplicates).</li>
- *   <li> Stores the vertices in Titan.</li>
+ *   <li> Stores the vertices in Neo4j.</li>
  *   <li> Creates a temporary HDFS file containing the property graph elements 
  *        annotated as follows:
  *   <ul>
- *       <li>Vertices are annotated with their Titan IDs.</li>
- *       <li>Edges are annotated with the Titan IDs of their source vertexes
+ *       <li>Vertices are annotated with their Neo4j IDs.</li>
+ *       <li>Edges are annotated with the Neo4j IDs of their source vertexes
  *       .</li>
  *       </ul>
  *       </ul>
@@ -95,20 +92,20 @@ import java.util.*;
  * see {@code DestinationVertexKeyFunction}.
  *  </p>
  * <p>
- * The second reducer then loads the edges into Titan.
+ * The second reducer then loads the edges into Neo4j.
  * </p>
  *
- * @see InputConfiguration
- * @see GraphBuildingRule
- * @see SourceVertexKeyFunction
+ * @see com.intel.hadoop.graphbuilder.pipeline.input.InputConfiguration
+ * @see com.intel.hadoop.graphbuilder.pipeline.tokenizer.GraphBuildingRule
+ * @see com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.SourceVertexKeyFunction
  * @see com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction
  * .DestinationVertexKeyFunction
  */
 
-public class TitanWriterMRChain extends GraphGenerationMRJob  {
+public class Neo4jWriterMRChain extends GraphGenerationMRJob  {
 
     private static final Logger LOG =
-            Logger.getLogger(TitanWriterMRChain.class);
+            Logger.getLogger(Neo4jWriterMRChain.class);
     private static final int RANDOM_MIN = 1;
     private static final int RANDOM_MAX = 1000000;
     private Configuration    conf;
@@ -129,11 +126,11 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
 
 
     /**
-     * Acquires the set-up time components necessary for creating a graph from  
-	 * the raw data and loading it into Titan.
-     * @param  {@code inputConfiguration}  The object that handles the creation 
+     * Acquires the set-up time components necessary for creating a graph from
+	 * the raw data and loading it into Neo4j.
+     * @param  {@code inputConfiguration}  The object that handles the creation
 	 *                                     of data records from raw data.
-     * @param  {@code graphBuildingRule}   The object that handles the creation 
+     * @param  {@code graphBuildingRule}   The object that handles the creation
 	 *                                     of property graph elements from
      *                                     data records.
      *
@@ -165,12 +162,12 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
     /**
      * Sets the user defined functions to reduce duplicate vertices and edges.
      *
-     * If the user does not specify these functions, the default method of  
+     * If the user does not specify these functions, the default method of
 	 * merging property lists will be used.
      *
-     * @param {@code vertexReducerFunction}   The user specified function for 
+     * @param {@code vertexReducerFunction}   The user specified function for
 	 *                                        reducing duplicate vertices.
-     * @param {@code edgeReducerFunction}     The user specified function for 
+     * @param {@code edgeReducerFunction}     The user specified function for
 	 *                                        reducing duplicate edges.
      */
 
@@ -202,7 +199,7 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
     /**
      * Sets the option to clean bidirectional edges.
      *
-     * @param {@code true}  The boolean option value, if true then remove 
+     * @param {@code true}  The boolean option value, if true then remove
 	 *                      bidirectional edges.
      */
 
@@ -212,7 +209,7 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
     }
 
     /**
-     * Sets the value class for the property graph elements coming from the 
+     * Sets the value class for the property graph elements coming from the
 	 * mapper or tokenizer.
      *
      * This type can vary depending on the class used for vertex IDs.
@@ -293,29 +290,29 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
 
 
     /**
-     * Creates the Titan graph for saving edges and removes the static open
+     * Creates the Neo4j graph for saving edges and removes the static open
      * method from setup so it can be mocked-up.
      *
-     * @return {@code TitanGraph}  For saving edges.
-     * @throws IOException
+     * @return {@code Neo4j2Graph}  For saving edges.
+     * @throws java.io.IOException
      */
-    private TitanGraph getTitanGraphInstance(Configuration configuration)
+    private Neo4j2Graph getNeo4j2GraphInstance(Configuration configuration)
             throws IOException {
-        BaseConfiguration titanConfig = new BaseConfiguration();
+        BaseConfiguration neo4jConfig = new BaseConfiguration();
 
-        return (TitanGraph) GraphDatabaseConnector.open("titan", titanConfig, configuration);
+        return (Neo4j2Graph) GraphDatabaseConnector.open("neo4j", neo4jConfig, configuration);
     }
 
     /*
      * This private method does the parsing of the command line -keys option
-     * into a list of GBTitanKey objects.
+     * into a list of GBNeo4jKey objects.
      *
      * The -keys option takes a comma separated list of key rules.
      *
      * A key rule is:  <property name>;<option_1>; ... <option_n>
      * where the options are datatype specifiers, flags to use the key for
      * indexing edges and vertices, or a uniqueness bit,
-     * per the definitions in TitanCommandLineOptions.
+     * per the definitions in Neo4jCommandLineOptions.
      *
      * Example:
      *    -keys  cf:userId;String;U;V,cf:eventId;E;Long
@@ -324,9 +321,9 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
      *    index taking string values, and a key for property cf:eventId that
      *    is an edge index taking Long values.
      */
-    private List<GBTitanKey> parseKeyCommandLine(String keyCommandLine) {
+    private List<GBNeo4jKey> parseKeyCommandLine(String keyCommandLine) {
 
-        ArrayList<GBTitanKey> gbKeyList = new ArrayList<GBTitanKey>();
+        ArrayList<GBNeo4jKey> gbKeyList = new ArrayList<GBNeo4jKey>();
 
         if (keyCommandLine.length() > 0) {
 
@@ -338,56 +335,56 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
                 if (ruleProperties.length > 0) {
                     String propertyName = ruleProperties[0];
 
-                    GBTitanKey gbTitanKey = new GBTitanKey(propertyName);
+                    GBNeo4jKey gbNeo4jKey = new GBNeo4jKey(propertyName);
 
                     for (int i = 1; i < ruleProperties.length; i++) {
                         String ruleModifier = ruleProperties[i];
 
-                        if (ruleModifier.equals(TitanCommandLineOptions
+                        if (ruleModifier.equals(Neo4jCommandLineOptions
                                 .STRING_DATATYPE)) {
-                            gbTitanKey.setDataType(String.class);
+                            gbNeo4jKey.setDataType(String.class);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.INT_DATATYPE)) {
-                            gbTitanKey.setDataType(Integer.class);
+                                (Neo4jCommandLineOptions.INT_DATATYPE)) {
+                            gbNeo4jKey.setDataType(Integer.class);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.LONG_DATATYPE)) {
-                            gbTitanKey.setDataType(Long.class);
+                                (Neo4jCommandLineOptions.LONG_DATATYPE)) {
+                            gbNeo4jKey.setDataType(Long.class);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.DOUBLE_DATATYPE)) {
-                            gbTitanKey.setDataType(Double.class);
+                                (Neo4jCommandLineOptions.DOUBLE_DATATYPE)) {
+                            gbNeo4jKey.setDataType(Double.class);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.FLOAT_DATATYPE)) {
-                            gbTitanKey.setDataType(Float.class);
+                                (Neo4jCommandLineOptions.FLOAT_DATATYPE)) {
+                            gbNeo4jKey.setDataType(Float.class);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.VERTEX_INDEXING)) {
-                            gbTitanKey.setIsVertexIndex(true);
+                                (Neo4jCommandLineOptions.VERTEX_INDEXING)) {
+                            gbNeo4jKey.setIsVertexIndex(true);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.EDGE_INDEXING)) {
-                            gbTitanKey.setIsEdgeIndex(true);
+                                (Neo4jCommandLineOptions.EDGE_INDEXING)) {
+                            gbNeo4jKey.setIsEdgeIndex(true);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.UNIQUE)) {
-                            gbTitanKey.setIsUnique(true);
+                                (Neo4jCommandLineOptions.UNIQUE)) {
+                            gbNeo4jKey.setIsUnique(true);
                         } else if (ruleModifier.equals
-                                (TitanCommandLineOptions.NOT_UNIQUE)) {
-                            gbTitanKey.setIsUnique(false);
+                                (Neo4jCommandLineOptions.NOT_UNIQUE)) {
+                            gbNeo4jKey.setIsUnique(false);
                         } else {
                             GraphBuilderExit.graphbuilderFatalExitNoException
                                     (StatusCode.BAD_COMMAND_LINE,
                                     "Error declaring keys.  " + ruleModifier
                                             + " is not a valid option.\n" +
-                                            TitanCommandLineOptions
+                                            Neo4jCommandLineOptions
                                                     .KEY_DECLARATION_CLI_HELP,
                                             LOG);
                         }
                     }
 
-                    // Titan requires that unique properties be vertex indexed
+                    // Neo4j requires that unique properties be vertex indexed
 
-                    if (gbTitanKey.isUnique()) {
-                        gbTitanKey.setIsVertexIndex(true);
+                    if (gbNeo4jKey.isUnique()) {
+                        gbNeo4jKey.setIsVertexIndex(true);
                     }
 
-                    gbKeyList.add(gbTitanKey);
+                    gbKeyList.add(gbNeo4jKey);
                 }
             }
         }
@@ -396,104 +393,76 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
     }
 
     /*
-     * Gets the set of Titan Key definitions from the command line...
+     * Gets the set of Neo4j Key definitions from the command line...
      */
 
-    private HashMap<String, TitanKey>
-        declareAndCollectKeys(TitanGraph graph, String keyCommandLine) {
+    private HashMap<String, GBNeo4jKey>
+        declareAndCollectKeys(Neo4j2Graph graph, String keyCommandLine) {
 
-        HashMap<String, TitanKey> keyMap = new HashMap<String, TitanKey>();
+        HashMap<String, GBNeo4jKey> keyMap = new HashMap<String, GBNeo4jKey>();
 
-        TitanKey gbIdKey = null;
-
-        // Because Titan requires combination of vertex names and vertex
+        // Because Neo4j requires combination of vertex names and vertex
         // labels into single strings for unique IDs the unique
-        // GB_ID_FOR_TITAN property must be of StringType
+        // GB_ID_FOR_NEO4J property must be of StringType
 
-        gbIdKey = graph.makeKey(TitanConfig.GB_ID_FOR_TITAN).dataType(String
-                .class)
-                .indexed(Vertex.class).unique().make();
+        keyMap.put(GB_ID_FOR_NEO4J, new GBNeo4jKey(GB_ID_FOR_NEO4J,String.class,false,true,true));
 
+        List<GBNeo4jKey> declaredKeys = parseKeyCommandLine(keyCommandLine);
 
-        keyMap.put(TitanConfig.GB_ID_FOR_TITAN, gbIdKey);
-
-        List<GBTitanKey> declaredKeys = parseKeyCommandLine(keyCommandLine);
-
-        for (GBTitanKey gbTitanKey : declaredKeys) {
-            KeyMaker keyMaker = graph.makeKey(gbTitanKey.getName());
-            keyMaker.dataType(gbTitanKey.getDataType());
-
-            if (gbTitanKey.isEdgeIndex()) {
-                keyMaker.indexed(Edge.class);
-            }
-
-            if (gbTitanKey.isVertexIndex()) {
-                keyMaker.indexed(Vertex.class);
-            }
-
-            if (gbTitanKey.isUnique()) {
-                keyMaker.unique();
-            }
-
-            TitanKey titanKey = keyMaker.make();
-
-            keyMap.put(titanKey.getName(), titanKey);
+        for (GBNeo4jKey gbNeo4jKey : declaredKeys) {
+            keyMap.put(gbNeo4jKey.getName(),gbNeo4jKey);
         }
 
         HashMap<String, Class<?>> propertyNameToTypeMap = graphSchema
                 .getMapOfPropertyNamesToDataTypes();
 
         for (String property : propertyNameToTypeMap.keySet()) {
-
             if (!keyMap.containsKey(property)) {
-                TitanKey key = graph.makeKey(property).dataType
-                        (propertyNameToTypeMap.get(property)).make();
-                keyMap.put(property, key);
+                Class<?> type = propertyNameToTypeMap.get(property);
+                keyMap.put(property, new GBNeo4jKey(property,type,false,true,false));
             }
-
         }
 
         return keyMap;
     }
 
     /*
-     * Opens the Titan graph database, and make the Titan keys required by
+     * Opens the Neo4j graph database, and make the Neo4j keys required by
      * the graph schema.
      */
-    private void initTitanGraph (String keyCommandLine) {
-        TitanGraph graph = null;
+    private void initNeo4j2Graph (String keyCommandLine) {
+        Neo4j2Graph graph = null;
 
         try {
-            graph = getTitanGraphInstance(conf);
+            graph = getNeo4j2GraphInstance(conf);
         } catch (IOException e) {
             GraphBuilderExit.graphbuilderFatalExitException(StatusCode
                     .UNHANDLED_IO_EXCEPTION,
                     "GRAPHBUILDER FAILURE: Unhandled IO exception while " +
-                            "attempting to connect to Titan.",  LOG, e);
+                            "attempting to connect to Neo4j.",  LOG, e);
         }
 
-        HashMap<String, TitanKey> propertyNamesToTitanKeysMap =
+        HashMap<String, GBNeo4jKey> propertyNamesToNeo4jKeysMap =
                 declareAndCollectKeys(graph, keyCommandLine);
 
         // now we declare the edge labels
         // one of these days we'll probably want to fully expose all the
-        // Titan knobs regarding manyToOne, oneToMany, etc
+        // Neo4j knobs regarding manyToOne, oneToMany, etc
 
 
 
         for (EdgeSchema edgeSchema : graphSchema.getEdgeSchemata())  {
-            ArrayList<TitanKey> titanKeys = new ArrayList<TitanKey>();
+            List<GBNeo4jKey> neo4jKeys = new ArrayList<>();
 
             for (PropertySchema propertySchema : edgeSchema
                     .getPropertySchemata() ) {
-                titanKeys.add(propertyNamesToTitanKeysMap.get(propertySchema
-                        .getName()));
+                GBNeo4jKey gbNeo4jKey = propertyNamesToNeo4jKeysMap.get(propertySchema.getName());
+                neo4jKeys.add(gbNeo4jKey);
             }
 
-            TitanKey[] titanKeyArray = titanKeys.toArray(new
-                    TitanKey[titanKeys.size()]);
-            graph.makeLabel(edgeSchema.getLabel()).signature(titanKeyArray)
-                    .make();
+            GBNeo4jKey[] neo4jKeyArray = neo4jKeys.toArray(new GBNeo4jKey[neo4jKeys.size()]);
+            // TODO
+//            graph.makeLabel(edgeSchema.getLabel()).signature(neo4jKeyArray).make();
         }
 
         graph.commit();
@@ -504,36 +473,36 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
      * specified by
      * {@code InputConfiguration} according to the graph construction rule
      * {@code GraphBuildingRule},
-     * and loads it into the Titan graph database.
+     * and loads it into the Neo4j graph database.
      *
      * @param {@code cmd}  User specified command line.
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws ClassNotFoundException
      * @throws InterruptedException
      */
     public void run(CommandLine cmd)
             throws IOException, ClassNotFoundException, InterruptedException {
 
-        // Warns the user if the Titan table already exists in Hbase.
+        // Warns the user if the Neo4j table already exists in Hbase.
 
-        String titanTableName = TitanConfig.config.getProperty
-                ("TITAN_STORAGE_TABLENAME");
+        String neo4jTableName = Neo4jConfig.config.getProperty
+                ("NEO4J_STORAGE_TABLENAME");
 
-        if (hbaseUtils.tableExists(titanTableName)) {
-            if (cmd.hasOption(BaseCLI.Options.titanAppend.getLongOpt())) {
-                LOG.info("WARNING:  hbase table " + titanTableName +
-                         " already exists. Titan will append new graph to " +
+        if (hbaseUtils.tableExists(neo4jTableName)) {
+            if (cmd.hasOption(BaseCLI.Options.neo4jAppend.getLongOpt())) {
+                LOG.info("WARNING:  hbase table " + neo4jTableName +
+                         " already exists. Neo4j will append new graph to " +
                         "existing data.");
-            } else if (cmd.hasOption(BaseCLI.Options.titanOverwrite
+            } else if (cmd.hasOption(BaseCLI.Options.neo4jOverwrite
                     .getLongOpt())) {
-                HBaseUtils.getInstance().removeTable(titanTableName);
-                LOG.info("WARNING:  hbase table " + titanTableName +
-                        " already exists. Titan will overwrite existing data " +
+                HBaseUtils.getInstance().removeTable(neo4jTableName);
+                LOG.info("WARNING:  hbase table " + neo4jTableName +
+                        " already exists. Neo4j will overwrite existing data " +
                         "with the new graph.");
             } else {
                 GraphBuilderExit.graphbuilderFatalExitNoException(StatusCode
                         .BAD_COMMAND_LINE,
-                        "GRAPHBUILDER_FAILURE: hbase table " + titanTableName +
+                        "GRAPHBUILDER_FAILURE: hbase table " + neo4jTableName +
                                 " already exists. Use -a option if you wish " +
                                 "to append new graph to existing data."
                         + " Use -O option if you wish to overwrite the graph" +
@@ -554,12 +523,12 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
 
         Timer time = new Timer();
         time.start();
-        if (cmd.hasOption(BaseCLI.Options.titanKeyIndex.getLongOpt())) {
-            keyCommandLine = cmd.getOptionValue(BaseCLI.Options.titanKeyIndex
+        if (cmd.hasOption(BaseCLI.Options.neo4jKeyIndex.getLongOpt())) {
+            keyCommandLine = cmd.getOptionValue(BaseCLI.Options.neo4jKeyIndex
                     .getLongOpt());
         }
 
-        initTitanGraph(keyCommandLine);
+        initNeo4j2Graph(keyCommandLine);
 
         runReadInputLoadVerticesMRJob(intermediateDataFilePath, cmd);
 
@@ -568,7 +537,7 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
         runEdgeLoadMapOnlyJob(intermediateEdgeFilePath);
 
         Long runtime = time.time_since_last();
-        LOG.info("Time taken to load the graph to Titan: "
+        LOG.info("Time taken to load the graph to Neo4j: "
                 + runtime +  " seconds");
 
         FileSystem fs = FileSystem.get(getConf());
@@ -610,9 +579,9 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
         // create loadVerticesJob from configuration and initialize MR
         // parameters
 
-        Job loadVerticesJob = new Job(conf, "TitanWriterMRChain Job 1: " +
-                "Writing Vertices into Titan");
-        loadVerticesJob.setJarByClass(TitanWriterMRChain.class);
+        Job loadVerticesJob = new Job(conf, "Neo4jWriterMRChain Job 1: " +
+                "Writing Vertices into Neo4j");
+        loadVerticesJob.setJarByClass(Neo4jWriterMRChain.class);
 
         // configure mapper  and input
 
@@ -623,11 +592,11 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
 
         // configure reducer  output
 
-        loadVerticesJob.setReducerClass(VerticesIntoTitanReducer.class);
+        loadVerticesJob.setReducerClass(VerticesIntoNeo4jReducer.class);
 
 
         // check that the graph database is up and running...
-        GraphDatabaseConnector.checkTitanInstallation();
+        GraphDatabaseConnector.checkNeo4jInstallation();
 
         // now we set up those temporary storage locations...;
 
@@ -639,12 +608,12 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
 
         // fired up and ready to go!
 
-        LOG.info("=========== TitanWriterMRChain Job 1: Create initial  graph" +
-                " elements from raw data, load vertices to Titan ===========");
+        LOG.info("=========== Neo4jWriterMRChain Job 1: Create initial  graph" +
+                " elements from raw data, load vertices to Neo4j ===========");
 
         LOG.info("input: " + inputConfiguration.getDescription());
-        LOG.info("Output is a titan dbase = " +  TitanConfig.config
-                .getProperty("TITAN_STORAGE_TABLENAME"));
+        LOG.info("Output is a neo4j dbase = " +  Neo4jConfig.config
+                .getProperty("NEO4J_STORAGE_TABLENAME"));
 
         LOG.info("InputFormat = " + inputConfiguration.getDescription());
         LOG.info("GraphBuildingRule = " + graphBuildingRule.getClass()
@@ -673,13 +642,13 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
             Path intermediateEdgeFilePath) throws
             IOException, ClassNotFoundException, InterruptedException {
 
-        // create MR Job to load edges into Titan from configuration and
+        // create MR Job to load edges into Neo4j from configuration and
         // initialize MR parameters
 
         Job writeEdgesJob =
                 new Job(conf,
-                        "TitanWriterMRChain Job 2: Writing Edges to Titan");
-        writeEdgesJob.setJarByClass(TitanWriterMRChain.class);
+                        "Neo4jWriterMRChain Job 2: Writing Edges to Neo4j");
+        writeEdgesJob.setJarByClass(Neo4jWriterMRChain.class);
 
         // configure mapper  and input
 
@@ -715,7 +684,7 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
         FileOutputFormat.setOutputPath(writeEdgesJob,
                 intermediateEdgeFilePath);
 
-        LOG.info("=========== Job 2: Propagate Titan Vertex IDs to Edges " +
+        LOG.info("=========== Job 2: Propagate Neo4j Vertex IDs to Edges " +
                 "  ===========");
 
         LOG.info("==================== Start " +
@@ -728,17 +697,17 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
     private void runEdgeLoadMapOnlyJob(Path intermediateEdgeFilePath)
             throws IOException, ClassNotFoundException, InterruptedException {
 
-        // create MR Job to load edges into Titan from configuration and
+        // create MR Job to load edges into Neo4j from configuration and
         // initialize MR parameters
 
-        Job addEdgesJob = new Job(conf, "TitanWriterMRChain Job 3: " +
+        Job addEdgesJob = new Job(conf, "Neo4jWriterMRChain Job 3: " +
                 "Writing " +
-                "Edges to Titan");
-        addEdgesJob.setJarByClass(TitanWriterMRChain.class);
+                "Edges to Neo4j");
+        addEdgesJob.setJarByClass(Neo4jWriterMRChain.class);
 
         // configure mapper  and input
 
-        addEdgesJob.setMapperClass(EdgesIntoTitanMapper.class);
+        addEdgesJob.setMapperClass(EdgesIntoNeo4jMapper.class);
 
         addEdgesJob.setMapOutputKeyClass(NullWritable.class);
         addEdgesJob.setMapOutputValueClass(NullWritable.class);
@@ -764,7 +733,7 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
         addEdgesJob.setOutputFormatClass(org.apache.hadoop.mapreduce.lib
                 .output.NullOutputFormat.class);
 
-        LOG.info("=========== Job 3: Add edges to Titan " +
+        LOG.info("=========== Job 3: Add edges to Neo4j " +
                 "  ===========");
 
         LOG.info("==================== Start " +
@@ -773,4 +742,4 @@ public class TitanWriterMRChain extends GraphGenerationMRJob  {
         LOG.info("=================== Done " +
                 "====================================\n");
     }
-}   // End of TitanWriterMRChain
+}   // End of Neo4jWriterMRChain

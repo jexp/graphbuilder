@@ -32,6 +32,7 @@ public enum StatusCode {
     INDESCRIBABLE_FAILURE(9,      "GRAPHBUILDER: failure"),
     HBASE_ERROR(10,               "GRAPHBUILDER: hbase error"),
     TITAN_ERROR(11,               "GRAPHBUILDER: Titan error"),
+    NEO4J_ERROR(11,               "GRAPHBUILDER: Neo4j error"),
     CANNOT_FIND_CONFIG_FILE(12,   "GRAPHBUILDER: cannot locate config file");
 
     private final int    status;

@@ -49,7 +49,7 @@ public class RuntimeConfig {
         return uniqueInstanceOfRuntimeConfig;
     }
 
-    public static synchronized RuntimeConfig getInstanceWithDefaultConfig(HashMap<String, String> defaultConfigs) {
+    public static synchronized RuntimeConfig getInstanceWithDefaultConfig(Map<String, String> defaultConfigs) {
         getInstance();
         uniqueInstanceOfRuntimeConfig.addConfigMap(defaultConfigs);
         return uniqueInstanceOfRuntimeConfig;
@@ -138,7 +138,7 @@ public class RuntimeConfig {
         }
     }
 
-    public void addConfigMap(HashMap<String, String> configMap) {
+    public void addConfigMap(Map<String, String> configMap) {
         Iterator it = configMap.entrySet().iterator();
 
         while (it.hasNext()) {

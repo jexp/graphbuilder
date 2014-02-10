@@ -17,9 +17,12 @@
  * For more about this software visit:
  *     http://www.01.org/GraphBuilder
  */
-package com.intel.hadoop.graphbuilder.pipeline.output.titan;
+package com.intel.hadoop.graphbuilder.pipeline.output.neo4j;
 
-import com.intel.hadoop.graphbuilder.graphelements.*;
+import com.intel.hadoop.graphbuilder.graphelements.Edge;
+import com.intel.hadoop.graphbuilder.graphelements.EdgeID;
+import com.intel.hadoop.graphbuilder.graphelements.SerializedGraphElement;
+import com.intel.hadoop.graphbuilder.graphelements.VertexID;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.KeyFunction;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.SourceVertexKeyFunction;
 import com.intel.hadoop.graphbuilder.types.LongType;
@@ -29,7 +32,7 @@ import com.intel.hadoop.graphbuilder.util.ArgumentBuilder;
 import com.intel.hadoop.graphbuilder.util.GraphBuilderExit;
 import com.intel.hadoop.graphbuilder.util.GraphDatabaseConnector;
 import com.intel.hadoop.graphbuilder.util.StatusCode;
-import com.thinkaurelius.titan.core.TitanGraph;
+import com.tinkerpop.blueprints.impls.neo4j2.Neo4j2Graph;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
@@ -41,14 +44,14 @@ import java.util.Hashtable;
 import java.util.Map;
 
 /**
- * Write edges with Titan vertex ID of the target vertex to HDFS.
+ * Write edges with Neo4j vertex ID of the target vertex to HDFS.
  * <p>
  * This class gathers each vertex with the edges that point to that vertex,
  * that is, those edges for which the vertex is the destination. Because the
- * edges were tagged with the Titan IDs of their sources in the previous Map
- * Reduce job and each vertex is tagged with its Titan ID,
- * we now know the Titan ID of the source and destination of the edges and
- * can add them to Titan.
+ * edges were tagged with the Neo4j IDs of their sources in the previous Map
+ * Reduce job and each vertex is tagged with its Neo4j ID,
+ * we now know the Neo4j ID of the source and destination of the edges and
+ * can add them to Neo4j.
  * </p>
  */
 
@@ -57,7 +60,7 @@ public class IntermediateEdgeWriterReducer extends Reducer<IntWritable,
     private static final Logger LOG = Logger.getLogger(
                 IntermediateEdgeWriterReducer.class);
 
-    private Hashtable<Object, Long> vertexNameToTitanID;
+    private Hashtable<Object, Long> vertexNameToNeo4jID;
 
     private IntermediateEdgeWriterReducerCallback intermediateEdgeWriterReducerCallback;
 
@@ -72,32 +75,32 @@ public class IntermediateEdgeWriterReducer extends Reducer<IntWritable,
     }
 
     /*
-     * Creates the Titan graph for saving edges and removes the static open
+     * Creates the Neo4j graph for saving edges and removes the static open
      * method from setup so it can be mocked-up.
      *
-     * @return {@code TitanGraph}  For saving edges.
+     * @return {@code Neo4j2Graph}  For saving edges.
      * @throws IOException
      */
-    private TitanGraph getTitanGraphInstance (Context context) throws
+    private Neo4j2Graph getNeo4j2GraphInstance (Context context) throws
             IOException {
-        BaseConfiguration titanConfig = new BaseConfiguration();
-        return (TitanGraph) GraphDatabaseConnector.open("titan",
-                titanConfig,
+        BaseConfiguration neo4jConfig = new BaseConfiguration();
+        return (Neo4j2Graph) GraphDatabaseConnector.open("neo4j",
+                neo4jConfig,
                 context.getConfiguration());
     }
 
     /**
-     * Sets up the Titan connection.
+     * Sets up the Neo4j connection.
      *
      * @param {@code context}  The reducer context provided by Hadoop.
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
     public void setup(Context context) throws IOException,
             InterruptedException {
 
-        this.vertexNameToTitanID = new Hashtable<Object, Long>();
+        this.vertexNameToNeo4jID = new Hashtable<Object, Long>();
 
         intermediateEdgeWriterReducerCallback = new IntermediateEdgeWriterReducerCallback();
 
@@ -126,17 +129,17 @@ public class IntermediateEdgeWriterReducer extends Reducer<IntWritable,
      * <p>
      * We assume that the edges and vertices have been gathered so that every
      * edge shares the reducer of its destination vertex,
-     * and that every edge has previously been assigned the Titan ID of its
+     * and that every edge has previously been assigned the Neo4j ID of its
      * source vertex.
      * </p>
      * <p>
-     * Titan IDs are propagated from the destination vertices to each edge
+     * Neo4j IDs are propagated from the destination vertices to each edge
      * </p>
      * @param {@code key}      A map reduce key; a hash of a vertex ID.
      * @param {@code values}   Either a vertex with that hashed vertex ID,
      *                         or an edge with said vertex as its destination.
      * @param {@code context}  A reducer context provided by Hadoop.
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
@@ -151,14 +154,14 @@ public class IntermediateEdgeWriterReducer extends Reducer<IntWritable,
              * This is calling IntermediateEdgeWriterReducerCallback which is an
              * implementation of GraphElementTypeCallback to add all the
              * edges and vertices into  the edgePropertyTable and
-             * vertexNameToTitanID hashmaps
+             * vertexNameToNeo4jID hashmaps
              */
             graphElement.graphElement().typeCallback(
                     intermediateEdgeWriterReducerCallback,
                     ArgumentBuilder.newArguments()
                             .with("edgePropertyTable", edgePropertyTable)
-                            .with("vertexNameToTitanID",
-                    vertexNameToTitanID));
+                            .with("vertexNameToNeo4jID",
+                    vertexNameToNeo4jID));
         }
 
         int edgeCount   = 0;
@@ -179,11 +182,11 @@ public class IntermediateEdgeWriterReducer extends Reducer<IntWritable,
             Edge tempEdge = new Edge();
             tempEdge.configure(srcVertexId, tgtVertexId, edgeLabel, propertyMap);
 
-            // Add the Titan ID of the target vertex
+            // Add the Neo4j ID of the target vertex
 
-            long dstTitanId
-                    = vertexNameToTitanID.get(edgeMapEntry.getKey().getDst());
-            tempEdge.setProperty("tgtTitanID", new LongType(dstTitanId));
+            long dstNeo4jId
+                    = vertexNameToNeo4jID.get(edgeMapEntry.getKey().getDst());
+            tempEdge.setProperty("tgtNeo4jID", new LongType(dstNeo4jId));
 
             outValue.init(tempEdge);
             outKey.set(keyFunction.getEdgeKey(tempEdge));

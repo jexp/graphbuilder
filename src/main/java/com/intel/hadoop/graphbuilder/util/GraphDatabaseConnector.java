@@ -19,10 +19,12 @@
  */
 package com.intel.hadoop.graphbuilder.util;
 
+import com.intel.hadoop.graphbuilder.pipeline.output.neo4j.Neo4jConfig;
 import com.intel.hadoop.graphbuilder.pipeline.output.titan.TitanConfig;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.tinkerpop.blueprints.Graph;
+import com.tinkerpop.blueprints.impls.neo4j2.Neo4j2Graph;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.log4j.Logger;
 import java.util.Iterator;
@@ -45,7 +47,7 @@ public class GraphDatabaseConnector {
      *                                                 particularly if you try to open an unsupported graph database.
      */
 
-    public static TitanGraph open(String graphDB, org.apache.commons.configuration.Configuration configuration,
+    public static Graph open(String graphDB, org.apache.commons.configuration.Configuration configuration,
                                   org.apache.hadoop.conf.Configuration hadoopConfig)
             throws UnsupportedOperationException, NullPointerException {
 
@@ -64,8 +66,10 @@ public class GraphDatabaseConnector {
             LOG.fatal("GRAPHBUILDER ERROR: Allegrograph not supported yet");
             throw new UnsupportedOperationException();
         }  else if ("neo4j".equals(graphDB)) {
-            LOG.fatal("GRAPHBUILDER ERROR: neo4j not supported yet");
-            throw new UnsupportedOperationException();
+            for (Map.Entry<String, String> entry : Neo4jConfig.config.getAllConfigUnderNamespace(Neo4jConfig.NEO4J_PREFIX).entrySet()) {
+                configuration.setProperty(entry.getKey(), entry.getValue());
+            }
+            return new Neo4j2Graph(configuration);
         }else if (null == graphDB) {
             LOG.fatal("GRAPHBUILDER ERROR: Cannot create a null graph. Please specify titan | allegrograph | neo4j");
             throw new IllegalArgumentException();
@@ -82,6 +86,27 @@ public class GraphDatabaseConnector {
             if (g == null) {
                 GraphBuilderExit.graphbuilderFatalExitNoException(StatusCode.TITAN_ERROR,
                         "GRAPHBUILDER_ERROR: Unable to connect to Titan", LOG);
+            }
+        } catch (UnsupportedOperationException e) {
+            LOG.fatal("GRAPHBUILDER ERROR: Unable to open graph database");
+        } catch (NullPointerException e) {
+            LOG.fatal("GRAPHBUILDER ERROR: attempt to open graph database using null parameter string");
+        }
+        finally {
+            if (g != null) {
+                g.shutdown();
+            }
+        }
+    }
+    public static void checkNeo4jInstallation() {
+        BaseConfiguration c = new BaseConfiguration();
+        Graph             g = null;
+
+        try {
+            g = GraphDatabaseConnector.open("neo4j", c, null);
+            if (g == null) {
+                GraphBuilderExit.graphbuilderFatalExitNoException(StatusCode.NEO4J_ERROR,
+                        "GRAPHBUILDER_ERROR: Unable to connect to Neo4j", LOG);
             }
         } catch (UnsupportedOperationException e) {
             LOG.fatal("GRAPHBUILDER ERROR: Unable to open graph database");

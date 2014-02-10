@@ -20,6 +20,7 @@
 package com.intel.hadoop.graphbuilder.util;
 
 import com.intel.hadoop.graphbuilder.pipeline.input.hbase.HBaseCommandLineOptions;
+import com.intel.hadoop.graphbuilder.pipeline.output.neo4j.Neo4jCommandLineOptions;
 import com.intel.hadoop.graphbuilder.pipeline.output.titan.TitanCommandLineOptions;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
@@ -59,6 +60,13 @@ public class BaseCLI {
     private static final String TITAN_KEY_INDEX_DECLARATION_CLI_HELP = TitanCommandLineOptions.KEY_DECLARATION_CLI_HELP;
     private static final String TITAN_KEY_INDEX = TitanCommandLineOptions.CMD_KEYS_OPTNAME;
 
+    //neo4j option long names
+    private static final String NEO4J_APPEND = Neo4jCommandLineOptions.APPEND;
+    private static final String NEO4J_OVERWRITE = Neo4jCommandLineOptions.OVERWRITE;
+    private static final String NEO4J_STORAGE = Neo4jCommandLineOptions.STORE;
+    private static final String NEO4J_KEY_INDEX_DECLARATION_CLI_HELP = Neo4jCommandLineOptions.KEY_DECLARATION_CLI_HELP;
+    private static final String NEO4J_KEY_INDEX = Neo4jCommandLineOptions.CMD_KEYS_OPTNAME;
+
     //general options
     private static final String CMD_OUTPUT_OPTION_NAME = "out";
     private static final String CMD_INPUT_OPTION_NAME  = "in";
@@ -71,6 +79,9 @@ public class BaseCLI {
         titanAppend(CLI_TITAN_APPEND_OPTION), titanKeyIndex(CLI_TITAN_KEY_INDEX),
         titanOverwrite(CLI_TITAN_OVERWRITE_OPTION),
         titanStorage(CLI_TITAN_STORAGE_OPTION),
+        neo4jAppend(CLI_NEO4J_APPEND_OPTION), neo4jKeyIndex(CLI_NEO4J_KEY_INDEX),
+        neo4jOverwrite(CLI_NEO4J_OVERWRITE_OPTION),
+        neo4jStorage(CLI_NEO4J_STORAGE_OPTION),
         outputPath(CLI_OUTPUT_PATH_OPTION), inputPath(CLI_INPUT_PATH_OPTION);
 
         private final Option option;
@@ -84,6 +95,11 @@ public class BaseCLI {
             .withDescription("select Titan for graph storage")
             .withArgName("titan")
             .create("t");
+
+    private static final Option CLI_NEO4J_STORAGE_OPTION = OptionBuilder.withLongOpt(NEO4J_STORAGE)
+            .withDescription("select Neo4j for graph storage")
+            .withArgName("neo4j")
+            .create("n");
 
     private static final Option CLI_FLATTEN_LIST_OPTION = OptionBuilder.withLongOpt(FLATTEN_LISTS_OPTION_NAME)
             .withDescription("Flag that expends lists into multiple items. " )
@@ -103,6 +119,20 @@ public class BaseCLI {
 
     private static final Option CLI_TITAN_KEY_INDEX = OptionBuilder.withLongOpt(TITAN_KEY_INDEX)
             .withDescription("Specify keys, please. " + TITAN_KEY_INDEX_DECLARATION_CLI_HELP)
+            .hasArgs()
+            .withArgName("Keys")
+            .create("k");
+
+    private static final Option CLI_NEO4J_APPEND_OPTION= OptionBuilder.withLongOpt(NEO4J_APPEND)
+            .withDescription("Append Graph to Current Graph at Specified Neo4j Table")
+            .create("a");
+
+    private static final Option CLI_NEO4J_OVERWRITE_OPTION = OptionBuilder.withLongOpt(NEO4J_OVERWRITE)
+            .withDescription("Overwrite the existing graph at the specified Neo4j Table")
+            .create("O");
+
+    private static final Option CLI_NEO4J_KEY_INDEX = OptionBuilder.withLongOpt(NEO4J_KEY_INDEX)
+            .withDescription("Specify keys, please. " + NEO4J_KEY_INDEX_DECLARATION_CLI_HELP)
             .hasArgs()
             .withArgName("Keys")
             .create("k");

@@ -17,7 +17,7 @@
  * For more about this software visit:
  *     http://www.01.org/GraphBuilder
  */
-package com.intel.hadoop.graphbuilder.pipeline.output.titan;
+package com.intel.hadoop.graphbuilder.pipeline.output.neo4j;
 
 import com.intel.hadoop.graphbuilder.graphelements.EdgeID;
 import com.intel.hadoop.graphbuilder.graphelements.GraphElement;
@@ -28,28 +28,24 @@ import com.intel.hadoop.graphbuilder.pipeline.output.GraphElementWriter;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.DestinationVertexKeyFunction;
 import com.intel.hadoop.graphbuilder.pipeline.pipelinemetadata.keyfunction.KeyFunction;
 import com.intel.hadoop.graphbuilder.util.*;
-import com.thinkaurelius.titan.core.TitanGraph;
-
+import com.tinkerpop.blueprints.impls.neo4j2.Neo4j2Graph;
+import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Reducer;
-
-import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Hashtable;
-
-import org.apache.hadoop.io.IntWritable;
-
-import org.apache.log4j.Logger;
 
 /**
  * This reducer performs the following tasks:
  * <ul>
  *  <li>removes duplicate edges and vertices.</li>
- *  <li>loads each vertex into Titan and tags each with its Titan ID and passes 
+ *  <li>loads each vertex into Neo4j and tags each with its Neo4j ID and passes
  *      it to the next Map Reducer job through the temp file.</li>
- *  <li>tags each edge with the Titan ID of its source vertex and passes it to 
+ *  <li>tags each edge with the Neo4j ID of its source vertex and passes it to
  *      the next Map Reducer job.</li>
  * </ul>
  * <p>
@@ -60,18 +56,18 @@ import org.apache.log4j.Logger;
  * .SourceVertexKeyFunction
  */
 
-public class VerticesIntoTitanReducer extends Reducer<IntWritable,
+public class VerticesIntoNeo4jReducer extends Reducer<IntWritable,
         SerializedGraphElement, IntWritable, SerializedGraphElement> {
 
     private static final Logger LOG = Logger.getLogger
-            (VerticesIntoTitanReducer.class);
+            (VerticesIntoNeo4jReducer.class);
 
     private boolean    noBiDir;
     private Functional edgeReducerFunction;
     private Functional vertexReducerFunction;
-    private TitanGraph graph;
+    private Neo4j2Graph graph;
 
-    private Hashtable<Object, Long> vertexNameToTitanID;
+    private Hashtable<Object, Long> vertexNameToNeo4jID;
     private IntWritable            outKey;
     private SerializedGraphElement outValue;
     private Class                  outClass;
@@ -86,27 +82,27 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
     private Hashtable<EdgeID, Writable> edgeSet;
     private Hashtable<Object, Writable>   vertexSet;
 
-    private GraphElementWriter titanWriter;
+    private GraphElementWriter neo4jWriter;
     private GraphElementTypeCallback graphElementMerge;
 
     /**
-     * Creates the Titan graph for saving edges and removes the static open 
+     * Creates the Neo4j graph for saving edges and removes the static open
 	 * method from setup so it can be mocked-up.
      *
-     * @return {@code TitanGraph}  For saving edges.
-     * @throws IOException
+     * @return {@code Neo4j2Graph}  For saving edges.
+     * @throws java.io.IOException
      */
-    private TitanGraph getTitanGraphInstance (Context context) throws
+    private Neo4j2Graph getNeo4j2GraphInstance (Context context) throws
             IOException {
-        BaseConfiguration titanConfig = new BaseConfiguration();
-        return (TitanGraph) GraphDatabaseConnector.open("titan", titanConfig,
+        BaseConfiguration neo4jConfig = new BaseConfiguration();
+        return (Neo4j2Graph) GraphDatabaseConnector.open("neo4j", neo4jConfig,
                 context.getConfiguration());
     }
 
     /**
      * Sets up the reducer at the start of the task.
      * @param {@code context}
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
@@ -133,9 +129,9 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
         }
 
 
-        this.vertexNameToTitanID = new Hashtable<Object, Long>();
+        this.vertexNameToNeo4jID = new Hashtable<Object, Long>();
 
-        this.graph = getTitanGraphInstance(context);
+        this.graph = getNeo4j2GraphInstance(context);
         assert (null != this.graph);
 
         this.noBiDir = conf.getBoolean("noBiDir", false);
@@ -185,7 +181,7 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
      * @param {@code key}
      * @param {@code values}
      * @param {@code context}
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
@@ -212,9 +208,9 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
     }
 
     /**
-     * Closes the Titan graph connection at the end of the reducer.
+     * Closes the Neo4j graph connection at the end of the reducer.
      * @param {@code context}
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
@@ -243,14 +239,14 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
      * Calls the {@code GraphElementWriter} function the class was initiated
      * with  * to write the edges and vertices.
      *
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     public void write( Hashtable<EdgeID, Writable> edgeSet, Hashtable<Object,
             Writable> vertexSet, Context context) throws IOException,
             InterruptedException {
 
-        titanWriter.write(ArgumentBuilder.newArguments()
+        neo4jWriter.write(ArgumentBuilder.newArguments()
                 .with("edgeSet", edgeSet)
                 .with("vertexSet", vertexSet)
                 .with("vertexCounter", Counters.NUM_VERTICES)
@@ -264,7 +260,7 @@ public class VerticesIntoTitanReducer extends Reducer<IntWritable,
 
     private void initMergerWriter(Context context){
         graphElementMerge = new GraphElementMerge();
-        titanWriter = new TitanGraphElementWriter();
+        neo4jWriter = new Neo4jGraphElementWriter();
     }
 
     public  Enum getEdgeCounter(){

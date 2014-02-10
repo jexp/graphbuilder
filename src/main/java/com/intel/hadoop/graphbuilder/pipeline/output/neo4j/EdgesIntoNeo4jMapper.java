@@ -17,7 +17,7 @@
  * For more about this software visit:
  *     http://www.01.org/GraphBuilder
  */
-package com.intel.hadoop.graphbuilder.pipeline.output.titan;
+package com.intel.hadoop.graphbuilder.pipeline.output.neo4j;
 
 import com.intel.hadoop.graphbuilder.graphelements.SerializedGraphElement;
 import com.intel.hadoop.graphbuilder.pipeline.output.GraphElementWriter;
@@ -26,7 +26,7 @@ import com.intel.hadoop.graphbuilder.types.PropertyMap;
 import com.intel.hadoop.graphbuilder.util.GraphBuilderExit;
 import com.intel.hadoop.graphbuilder.util.GraphDatabaseConnector;
 import com.intel.hadoop.graphbuilder.util.StatusCode;
-import com.thinkaurelius.titan.core.TitanGraph;
+import com.tinkerpop.blueprints.impls.neo4j2.Neo4j2Graph;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -38,51 +38,51 @@ import java.io.IOException;
 
 /**
  * This class reads edges from HDFS by IntermediateEdgeWriterReducer. The
- * Titan ID of both source and target vertices are written along with
+ * Neo4j ID of both source and target vertices are written along with
  * the edge properties in the previous step. In this map-only job,
  * the map function fetches the reference to the source and target vertices
- * from Titan and adds the edges to Titan using the Blueprints addEdge() API.
- * The edge properties are also written to Titan
+ * from Neo4j and adds the edges to Neo4j using the Blueprints addEdge() API.
+ * The edge properties are also written to Neo4j
  */
 
-public class EdgesIntoTitanMapper extends Mapper<IntWritable,
+public class EdgesIntoNeo4jMapper extends Mapper<IntWritable,
         SerializedGraphElement, NullWritable, NullWritable> {
     private static final Logger LOG = Logger.getLogger(
-            EdgesIntoTitanMapper.class);
+            EdgesIntoNeo4jMapper.class);
 
     private static enum Counters {
         EDGE_PROPERTIES_WRITTEN,
         NUM_EDGES
     }
 
-    TitanGraph graph;
+    Neo4j2Graph graph;
 
-    private TitanGraph getTitanGraphInstance (Context context) throws
+    private Neo4j2Graph getNeo4j2GraphInstance (Context context) throws
             IOException {
-        BaseConfiguration titanConfig = new BaseConfiguration();
-        return (TitanGraph) GraphDatabaseConnector.open("titan",
-                titanConfig,
+        BaseConfiguration neo4jConfig = new BaseConfiguration();
+        return (Neo4j2Graph) GraphDatabaseConnector.open("neo4j",
+                neo4jConfig,
                 context.getConfiguration());
     }
 
     /**
-     * Sets up the Titan connection.
+     * Sets up the Neo4j connection.
      *
      * @param {@code context}  The reducer context provided by Hadoop.
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
     public void setup(Context context) throws IOException,
             InterruptedException {
 
-        this.graph = getTitanGraphInstance(context);
+        this.graph = getNeo4j2GraphInstance(context);
     }
 
     /**
      * The map function reads the references of the source and target
      * vertices of a given edge and writes the edge and its properties to
-     * Titan using the Blueprints addEdge() call
+     * Neo4j using the Blueprints addEdge() call
      *
      * @param key The data structure of the input file is every record
      *            per line is a serialized edge. Input of this
@@ -109,15 +109,15 @@ public class EdgesIntoTitanMapper extends Mapper<IntWritable,
         com.tinkerpop.blueprints.Vertex srcBlueprintsVertex =
                     this.graph.getVertex(serializedGraphElement.graphElement
                             ().getProperty(GraphElementWriter
-                            .PROPERTY_KEY_SRC_TITAN_ID));
+                            .PROPERTY_KEY_SRC_NEO4J_ID));
         com.tinkerpop.blueprints.Vertex tgtBlueprintsVertex =
                     this.graph.getVertex(serializedGraphElement.graphElement
                             ().getProperty(GraphElementWriter
-                            .PROPERTY_KEY_TGT_TITAN_ID));
+                            .PROPERTY_KEY_TGT_NEO4J_ID));
         PropertyMap propertyMap = (PropertyMap) serializedGraphElement
                 .graphElement().getProperties();
 
-        // Add the edge to Titan graph
+        // Add the edge to Neo4j graph
 
         com.tinkerpop.blueprints.Edge bluePrintsEdge = null;
         String edgeLabel = serializedGraphElement.graphElement().getLabel()
@@ -132,21 +132,21 @@ public class EdgesIntoTitanMapper extends Mapper<IntWritable,
         } catch (IllegalArgumentException e) {
 
             GraphBuilderExit.graphbuilderFatalExitException(
-                        StatusCode.TITAN_ERROR,
-                        "Could not add edge to Titan; likely a schema error. " +
+                        StatusCode.NEO4J_ERROR,
+                        "Could not add edge to Neo4j; likely a schema error. " +
                         "The label on the edge is  " + edgeLabel, LOG, e);
         }
 
         // The edge is added to the graph; now add the edge properties.
 
-        // The "srcTitanID" property was added during this MR job to
-        // propagate the Titan ID of the edge's source vertex to this
+        // The "srcNeo4jID" property was added during this MR job to
+        // propagate the Neo4j ID of the edge's source vertex to this
         // reducer ... we can remove it now.
 
         propertyMap.removeProperty(GraphElementWriter
-                .PROPERTY_KEY_SRC_TITAN_ID);
+                .PROPERTY_KEY_SRC_NEO4J_ID);
         propertyMap.removeProperty(GraphElementWriter
-                .PROPERTY_KEY_TGT_TITAN_ID);
+                .PROPERTY_KEY_TGT_NEO4J_ID);
 
         for (Writable propertyKey : propertyMap.getPropertyKeys()) {
            EncapsulatedObject mapEntry = (EncapsulatedObject)
@@ -173,9 +173,9 @@ public class EdgesIntoTitanMapper extends Mapper<IntWritable,
     /**
      * Performs cleanup tasks after the reducer finishes.
      *
-     * In particular, closes the Titan graph.
+     * In particular, closes the Neo4j graph.
      * @param {@code context}  Hadoop provided reducer context.
-     * @throws IOException
+     * @throws java.io.IOException
      * @throws InterruptedException
      */
     @Override
